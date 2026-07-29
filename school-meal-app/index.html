@@ -736,7 +736,7 @@
                 }
 
                 const result = await response.json();
-                
+                console.log("서버 응답:", result);
                 if (result.candidates && result.candidates.length > 0 &&
                     result.candidates[0].content && result.candidates[0].content.parts &&
                     result.candidates[0].content.parts.length > 0) {
