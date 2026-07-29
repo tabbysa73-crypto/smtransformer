@@ -1,0 +1,4 @@
+Ini, TOML
+[build]
+  publish = "."
+  functions = "netlify/functions"
