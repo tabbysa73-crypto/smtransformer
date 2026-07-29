@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 급식 이야기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Nanum Pen Script', cursive;
+            background-color: #fff0f5; /* 파스텔 라벤더 블러쉬 배경 */
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px; /* 16:9 비율에 맞춰 더 넓게 조정 */
+            margin: 0 auto;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-radius: 1rem;
+            overflow: hidden;
+            background-color: white;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        /* Loading overlay */
+        #loading-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 10;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #34d399; /* Tailwind emerald-400 */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Custom file input styling */
+        input[type="file"] {
+            display: none;
+        }
+        .custom-file-upload {
+            border: 2px dashed #34d399;
+            display: inline-block;
+            padding: 12px 24px;
+            cursor: pointer;
+            border-radius: 0.5rem;
+            color: #059669;
+            transition: all 0.3s ease;
+        }
+        .custom-file-upload:hover {
+            background-color: #ecfdf5;
+        }
+        
+        /* Styles for inline editing inputs */
+        .inline-edit-input {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #34d399;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-family: 'Nanum Pen Script', cursive;
+            outline: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 30;
+            resize: none; /* For textarea */
+            overflow: hidden;
+        }
+        
+        .inline-edit-title {
+            font-size: 32px; /* Base size, will scale */
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+        }
+
+        .inline-edit-desc {
+            font-size: 26px; /* Base size, will scale */
+            color: #444;
+            line-height: 1.2;
+        }
+    </style>
+</head>
+<body class="min-h-screen py-6 px-4 flex flex-col items-center">
+
+    <div id="password-overlay" class="fixed inset-0 bg-pink-50 flex flex-col items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center mx-4">
+            <h1 class="text-3xl font-bold text-emerald-700 mb-2 drop-shadow-sm">🔒 급식 이야기 앱</h1>
+            <p class="text-gray-500 mb-8">안전한 사용을 위해 비밀번호를 입력해주세요.<br>
+            
+            <input type="password" id="app-password" 
+                   class="w-full border-2 border-emerald-200 rounded-lg p-4 text-xl mb-4 focus:outline-none focus:border-emerald-500 transition text-center" 
+                   placeholder="비밀번호 입력" 
+                   onkeypress="if(event.key === 'Enter') checkPassword()">
+                   
+            <button onclick="checkPassword()" 
+                    class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 px-4 rounded-lg transition text-lg shadow-md hover:shadow-lg">
+                접속하기
+            </button>
+            <p class="text-sm text-gray-400 mt-4">* 배포하기 전 소스코드 내에서 비밀번호를 변경할 수 있습니다.</p>
+        </div>
+    </div>
+
+    <header id="app-header" class="text-center mb-0 md:-mb-2 z-10" style="display: none;">
+        <h1 class="text-4xl md:text-5xl font-bold text-emerald-700 drop-shadow-md">오늘의 급식 이야기</h1>
+        <p class="text-emerald-600 text-lg">급식 사진을 올리면 예쁘게 꾸며드려요!</p>
+    </header>
+
+    <main id="app-main" class="w-full max-w-2xl flex flex-col items-center gap-4 relative z-20" style="display: none;">
+        
+        <!-- Upload Section -->
+        <div class="w-full bg-white p-6 rounded-2xl shadow-sm text-center">
+            
+            <div class="bg-gray-50 p-4 rounded-xl mb-6 border border-gray-100">
+                <h3 class="text-emerald-600 font-bold mb-3 text-left px-2 text-xl">📅 월간 식단표(Excel)로 자동 입력하기</h3>
+                <div class="flex flex-col md:flex-row gap-3 items-center">
+                    <label class="custom-file-upload w-full md:w-auto text-xl hover:bg-gray-100 !border-gray-300 !text-gray-600 flex-1">
+                        <input type="file" id="excel-upload" accept=".xlsx, .xls">
+                        <span class="flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span id="excel-filename">식단표 엑셀 업로드</span>
+                        </span>
+                    </label>
+                    
+                    <div class="flex items-center gap-2 w-full md:w-auto">
+                        <input type="date" id="date-picker" class="p-2 border-2 border-gray-300 rounded-lg text-lg focus:outline-none focus:border-emerald-400 text-gray-700 w-full">
+                    </div>
+                </div>
+                <p id="excel-status-msg" class="text-sm text-gray-500 mt-2 text-left px-2 hidden"></p>
+            </div>
+
+            <div class="text-left mb-6 px-2">
+                <div class="flex justify-between items-center mb-2">
+                    <label for="menu-input" class="text-pink-400 font-bold text-2xl block">오늘의 식단 <span class="text-gray-400 text-lg font-normal">(선택사항)</span></label>
+                    <button id="suggest-btn" class="text-emerald-500 text-sm hover:text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 transition-colors hidden">✨ 식단 설명 추천받기</button>
+                </div>
+                <textarea id="menu-input" rows="3" class="w-full p-4 border-2 border-pink-200 rounded-xl focus:outline-none focus:border-pink-400 text-2xl text-gray-700 placeholder-gray-300 transition-colors bg-pink-50/30 resize-none" placeholder="예: 기장밥&#13;&#10;쇠고기미역국&#13;&#10;배추김치..."></textarea>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 mb-6">
+                <!-- Original File Upload Button -->
+                <label class="custom-file-upload flex-1 text-2xl hover:bg-pink-50 hover:border-pink-400 border-pink-300 border-2">
+                    <input type="file" id="image-upload" accept="image/*">
+                    <span class="flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        사진 업로드
+                    </span>
+                </label>
+                
+                <!-- Original Paste Area Button -->
+                <div id="paste-area" contenteditable="true" class="custom-file-upload flex-1 text-2xl border-pink-300 border-2 text-pink-400 hover:bg-pink-50 flex items-center justify-center outline-none whitespace-nowrap overflow-hidden">
+                    <span class="flex items-center justify-center gap-2 pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        클릭 후 Ctrl+V (캡쳐 붙여넣기)
+                    </span>
+                </div>
+            </div>
+
+            <button id="transform-btn" class="w-full md:w-2/3 mx-auto bg-pink-400 hover:bg-pink-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition transform hover:scale-105 text-2xl block mb-6">
+                ✨ 예쁘게 꾸미기 시작! ✨
+            </button>
+
+            <div id="image-status" class="hidden mb-6">
+                <p class="text-emerald-600 font-bold text-xl mb-3 flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    사진이 준비되었습니다!
+                </p>
+                <img id="image-preview" class="max-h-48 mx-auto rounded-xl shadow-md border-4 border-emerald-100 object-contain mb-4">
+            </div>
+            
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="canvas-container relative" id="result-container" style="display: none;">
+            <canvas id="output-canvas"></canvas>
+            
+            <!-- Loading Indicator -->
+            <div id="loading-overlay" class="flex rounded-xl">
+                <div class="spinner mb-4"></div>
+                <p class="text-emerald-700 text-lg font-bold">인공지능이 메뉴를 분석하고 꾸미는 중입니다...</p>
+                <p class="text-emerald-500 text-sm mt-2">약 10~15초 정도 소요될 수 있습니다.</p>
+            </div>
+        </div>
+
+        <!-- Item Management Bar -->
+        <div id="item-manage-bar" class="w-full bg-white p-4 rounded-2xl shadow-sm text-center hidden">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <span class="text-xl font-bold text-gray-700 flex items-center gap-2">
+                    🍽️ 등록된 식단 (<span id="item-count-text" class="text-emerald-600">0</span>개)
+                    <span class="text-sm font-normal text-gray-500">(이미지의 글자를 직접 클릭해 수정하거나, 아래에서 추가/삭제하세요)</span>
+                </span>
+                <button id="add-menu-item-btn" class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-5 rounded-xl shadow transition transform hover:scale-105 text-lg flex items-center gap-2">
+                    ➕ 식단 항목 추가
+                </button>
+            </div>
+            <div id="item-chips-container" class="flex flex-wrap gap-2 justify-center"></div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div id="action-buttons" class="flex gap-4 hidden justify-center mt-6">
+             <button id="download-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 text-xl">
+                이미지 저장하기
+            </button>
+            <button id="retry-btn" class="bg-amber-400 hover:bg-amber-500 text-white font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 text-xl">
+                🔄 다시 분석하기
+            </button>
+            <button id="reset-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 text-xl">
+                처음부터 다시
+            </button>
+        </div>
+        
+        <div id="error-message" class="text-red-500 font-bold hidden text-center mt-4 bg-red-100 p-4 rounded-lg w-full"></div>
+
+    </main>
+
+    <script>
+        const SETTING_PASSWORD = "3230"; // ★ 여기서 비밀번호를 변경하세요!
+
+        function checkPassword() {
+            const inputPw = document.getElementById('app-password').value;
+            if (inputPw === SETTING_PASSWORD) {
+                document.getElementById('password-overlay').style.display = 'none';
+                document.getElementById('app-header').style.display = 'block';
+                document.getElementById('app-main').style.display = 'flex';
+                
+                // 앱 실행 시 저장된 식단 데이터(로컬 스토리지) 불러오기
+                initializeSavedMenuData();
+            } else {
+                const pwInput = document.getElementById('app-password');
+                pwInput.value = '';
+                pwInput.placeholder = '비밀번호가 틀렸습니다!';
+                pwInput.classList.add('border-red-400');
+                setTimeout(() => {
+                    pwInput.placeholder = '비밀번호 입력';
+                    pwInput.classList.remove('border-red-400');
+                }, 2000);
+                pwInput.focus();
+            }
+        }
+
+        const uploadInput = document.getElementById('image-upload');
+        const canvas = document.getElementById('output-canvas');
+        const ctx = canvas.getContext('2d');
+        const resultContainer = document.getElementById('result-container');
+        
+        const pasteArea = document.getElementById('paste-area'); 
+        const menuInput = document.getElementById('menu-input');
+        const suggestBtn = document.getElementById('suggest-btn');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const actionButtons = document.getElementById('action-buttons');
+        const downloadBtn = document.getElementById('download-btn');
+        const retryBtn = document.getElementById('retry-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const errorMessage = document.getElementById('error-message');
+        
+        const excelUpload = document.getElementById('excel-upload');
+        const excelFilename = document.getElementById('excel-filename');
+        const datePicker = document.getElementById('date-picker');
+        const excelStatusMsg = document.getElementById('excel-status-msg');
+
+        // New elements for transform step
+        const imageStatus = document.getElementById('image-status');
+        const imagePreview = document.getElementById('image-preview');
+        const transformBtn = document.getElementById('transform-btn');
+
+        // Item management elements
+        const itemManageBar = document.getElementById('item-manage-bar');
+        const itemCountText = document.getElementById('item-count-text');
+        const itemChipsContainer = document.getElementById('item-chips-container');
+        const addMenuItemBtn = document.getElementById('add-menu-item-btn');
+
+        // State variables
+        let currentSelectedFile = null;
+        let currentSelectedImageObj = null;
+        let monthlyMenuData = {}; 
+        
+        // 로컬 스토리지에서 식단 데이터를 불러오는 함수 추가
+        function initializeSavedMenuData() {
+            const savedData = localStorage.getItem('schoolMealData');
+            if (savedData) {
+                try {
+                    monthlyMenuData = JSON.parse(savedData);
+                    if (Object.keys(monthlyMenuData).length > 0) {
+                        excelStatusMsg.textContent = "💾 이전에 업로드한 식단표가 자동 적용되었습니다.";
+                        excelStatusMsg.className = "text-sm text-blue-500 mt-2 text-left px-2 block";
+                        excelStatusMsg.classList.remove('hidden');
+                        excelFilename.textContent = "저장된 식단표 사용 중";
+                        
+                        loadMenuForDate(datePicker.value);
+                    }
+                } catch (e) {
+                    console.error("저장된 식단 데이터를 불러오는데 실패했습니다.", e);
+                }
+            }
+        }
+        
+        // State variables for interactive editing
+        let globalFoodData = []; 
+        let drawnBoxes = []; // Stores { x, y, width, height, type ('title' or 'desc'), index } for click detection
+        let editingInput = null; // Reference to currently active input element
+        let currentScale = 1; // Track canvas scaling for input positioning
+
+        // Set today's date as default
+        const today = new Date();
+        datePicker.value = today.toISOString().split('T')[0];
+
+        // We need an API key for Gemini. The system prompt says to leave it empty and Canvas will provide it.
+        
+        // Canvas dimensions (16:9 비율로 변경)
+        const CANVAS_WIDTH = 1280;
+        const CANVAS_HEIGHT = 720; 
+
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT; 
+
+        // Show suggest button when there's text
+        menuInput.addEventListener('input', () => {
+            if(menuInput.value.trim().length > 0) {
+                suggestBtn.classList.remove('hidden');
+            } else {
+                suggestBtn.classList.add('hidden');
+            }
+        });
+
+        // Event listener for suggestion button
+        suggestBtn.addEventListener('click', async () => {
+            const currentMenu = menuInput.value.trim();
+            if (!currentMenu) return;
+
+            suggestBtn.disabled = true;
+            const originalText = suggestBtn.textContent;
+            suggestBtn.textContent = '추천 받는 중...';
+            
+            try {
+                const prompt = `다음은 오늘 학교 급식 메뉴입니다:\n[${currentMenu}]\n\n각 메뉴에 대해 1~2줄의 짧고 귀여운 설명을 달아주세요. 이모지도 사용해주세요. 출력 형식은 메뉴 이름 뒤에 하이픈(-)을 붙이고 설명을 적는 식입니다. (예: 기장밥 - 고슬고슬 맛있는 기장밥! 🍚)\n\n다른 텍스트 없이 메뉴 설명만 반환해주세요.`;
+                
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }]
+                };
+
+                const response = await fetch('/.netlify/functions/gemini', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.candidates && result.candidates[0].content) {
+                        menuInput.value = result.candidates[0].content.parts[0].text;
+                    }
+                }
+            } catch (error) {
+                console.error("Suggestion error:", error);
+            } finally {
+                suggestBtn.disabled = false;
+                suggestBtn.textContent = originalText;
+            }
+        });
+
+        uploadInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        });
+
+        // Paste area visual feedback
+        pasteArea.addEventListener('focus', () => {
+            pasteArea.classList.add('ring-4', 'ring-pink-200');
+            // Clear any text that might accidentally get pasted in
+            if(pasteArea.textContent.trim() !== "클릭 후 Ctrl+V (캡쳐 붙여넣기)") {
+                 pasteArea.innerHTML = `<span class="flex items-center justify-center gap-2 pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        클릭 후 Ctrl+V (캡쳐 붙여넣기)
+                    </span>`;
+            }
+        });
+        pasteArea.addEventListener('blur', () => {
+             pasteArea.classList.remove('ring-4', 'ring-pink-200');
+        });
+
+        // Function to handle paste event
+        const handlePasteEvent = (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let imageFound = false;
+            for (let index in items) {
+                const item = items[index];
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    handleFile(file);
+                    imageFound = true;
+                    break;
+                }
+            }
+            // Prevent default behavior (like actually pasting image data into the div) if we handled an image
+            if (imageFound) {
+                 e.preventDefault();
+            }
+            // If they pasted text, clear it out on next frame to keep button looking clean
+            setTimeout(() => {
+                 if(pasteArea === document.activeElement && pasteArea.textContent.trim() !== "클릭 후 Ctrl+V (캡쳐 붙여넣기)") {
+                     pasteArea.innerHTML = `<span class="flex items-center justify-center gap-2 pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        클릭 후 Ctrl+V (캡쳐 붙여넣기)
+                    </span>`;
+                 }
+            }, 0);
+        };
+
+        // Attach paste event to both the area and document for maximum compatibility
+        pasteArea.addEventListener('paste', handlePasteEvent);
+        document.addEventListener('paste', handlePasteEvent);
+
+        excelUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            excelFilename.textContent = file.name;
+            excelStatusMsg.textContent = "엑셀 파일을 분석 중입니다...";
+            excelStatusMsg.classList.remove('hidden');
+            excelStatusMsg.className = "text-sm text-blue-500 mt-2 text-left px-2 block";
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    // Assuming the menu is on the first sheet
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Convert sheet to JSON array (array of arrays is easier to parse for grids)
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    parseMonthlyMenu(jsonData);
+                    
+                } catch (error) {
+                    console.error("Error parsing Excel:", error);
+                    excelStatusMsg.textContent = "엑셀 파일 분석에 실패했습니다. 파일 형식을 확인해주세요.";
+                    excelStatusMsg.className = "text-sm text-red-500 mt-2 text-left px-2 block";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function parseMonthlyMenu(grid) {
+            monthlyMenuData = {};
+            let year = null;
+            let month = null;
+
+            // 1. Find Year and Month (e.g., looking for "2026년 07월")
+            for (let r = 0; r < Math.min(10, grid.length); r++) {
+                for (let c = 0; c < grid[r].length; c++) {
+                    const cellVal = String(grid[r][c] || "");
+                    const match = cellVal.match(/(\d{4})년\s*(\d{1,2})월/);
+                    if (match) {
+                        year = parseInt(match[1]);
+                        month = parseInt(match[2]);
+                        break;
+                    }
+                }
+                if (year && month) break;
+            }
+
+            if (!year || !month) {
+                // If we can't find it in text, try to infer from the date picker or current date
+                const currentDate = new Date(datePicker.value || new Date());
+                year = currentDate.getFullYear();
+                month = currentDate.getMonth() + 1;
+                console.warn("Could not find explicit Year/Month in Excel, using default/selected: ", year, month);
+            }
+
+            // 2. Scan for dates and associated menus
+            // We look for cells that contain a number (the day) and the cell below it containing the menu
+            for (let r = 0; r < grid.length - 1; r++) {
+                for (let c = 0; c < grid[r].length; c++) {
+                    const cellVal = String(grid[r][c] || "").trim();
+                    // Check if cell is just a number (1-31) representing a day
+                    if (/^\d{1,2}$/.test(cellVal)) {
+                        const day = parseInt(cellVal);
+                        if (day >= 1 && day <= 31) {
+                            // The menu is typically in the cell immediately below the date cell
+                            let menuText = String(grid[r+1][c] || "").trim();
+                            
+                            // Sometimes the menu spans multiple rows in the same column until the next day row
+                            let nextRow = r + 2;
+                            while(nextRow < grid.length && !/^\d{1,2}$/.test(String(grid[nextRow][c]||"").trim()) && String(grid[nextRow][c]||"").trim() !== "") {
+                                menuText += "\n" + String(grid[nextRow][c] || "").trim();
+                                nextRow++;
+                            }
+
+                            if (menuText) {
+                                // Format date key as YYYY-MM-DD
+                                const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                // Clean up the menu text (remove empty lines, etc)
+                                monthlyMenuData[dateKey] = menuText.split('\n').map(item => item.trim()).filter(item => item).join('\n');
+                            }
+                        }
+                    }
+                }
+            }
+            
+            console.log("Parsed Menu Data:", monthlyMenuData);
+            
+            if (Object.keys(monthlyMenuData).length > 0) {
+                // 성공적으로 파싱된 데이터를 브라우저 로컬 스토리지에 저장
+                localStorage.setItem('schoolMealData', JSON.stringify(monthlyMenuData));
+                
+                excelStatusMsg.textContent = "식단표 분석 완료! 날짜를 선택하면 식단이 자동 입력됩니다.";
+                excelStatusMsg.className = "text-sm text-emerald-500 mt-2 text-left px-2 block";
+                loadMenuForDate(datePicker.value);
+            } else {
+                excelStatusMsg.textContent = "식단 정보를 찾을 수 없습니다. 양식을 확인해주세요.";
+                excelStatusMsg.className = "text-sm text-red-500 mt-2 text-left px-2 block";
+            }
+        }
+        
+        function loadMenuForDate(selectedDate) {
+             if (monthlyMenuData[selectedDate]) {
+                menuInput.value = monthlyMenuData[selectedDate];
+                // Visual feedback
+                menuInput.classList.add('ring-2', 'ring-emerald-400');
+                setTimeout(() => menuInput.classList.remove('ring-2', 'ring-emerald-400'), 500);
+            } else {
+                menuInput.value = '';
+                if(Object.keys(monthlyMenuData).length > 0) {
+                     // 주말 등 식단이 없는 날의 경우 안내 메시지 표시 (기존의 불편한 알림창 제거)
+                     console.log(`${selectedDate} 의 식단 정보가 없습니다.`);
+                     menuInput.placeholder = "해당 날짜의 식단 정보가 없습니다. 직접 입력해주세요.";
+                }
+            }
+        }
+
+        datePicker.addEventListener('change', (e) => {
+            if(Object.keys(monthlyMenuData).length > 0) {
+                loadMenuForDate(e.target.value);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file) return;
+
+            hideError();
+            currentSelectedFile = file;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    currentSelectedImageObj = img;
+                    
+                    // Show preview and transform button instead of processing immediately
+                    imagePreview.src = e.target.result;
+                    imagePreview.classList.remove('hidden');
+                    imageStatus.classList.remove('hidden');
+                    
+                    // Hide previous results if they exist
+                    resultContainer.style.display = 'none';
+                    actionButtons.classList.add('hidden');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Transform button click handler
+        transformBtn.addEventListener('click', () => {
+            if (!currentSelectedImageObj) {
+                showError("이미지를 먼저 업로드하거나 붙여넣어주세요.");
+                return;
+            }
+            
+            // Hide the status section during processing
+            imageStatus.classList.add('hidden');
+            resultContainer.style.display = 'block';
+            
+            // Start processing
+            processImage(currentSelectedImageObj, currentSelectedFile.type);
+        });
+
+        async function processImage(userImage, mimeType) {
+            showLoading();
+
+            try {
+                const base64Image = getBase64Image(userImage);
+                const pureBase64 = base64Image.split(',')[1];
+
+                const foodData = await analyzeFoodImage(pureBase64, mimeType);
+                globalFoodData = foodData; // Store globally for editing
+                
+                await drawFinalImage(userImage, globalFoodData);
+                
+                hideLoading();
+                actionButtons.classList.remove('hidden');
+                if (itemManageBar) itemManageBar.classList.remove('hidden');
+
+                // Scroll to see the result
+                resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            } catch (error) {
+                console.error("Error processing image:", error);
+                showError("이미지 처리 중 오류가 발생했습니다: " + error.message);
+                hideLoading();
+                // Even on error, let's try to just draw the image on the background so it's not totally broken
+                drawFallbackImage(userImage);
+            }
+        }
+
+        function getBase64Image(img) {
+            // Create a temporary canvas to resize image if it's too large before sending to API
+            const tempCanvas = document.createElement('canvas');
+            const MAX_SIZE = 1024;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > MAX_SIZE) {
+                    height *= MAX_SIZE / width;
+                    width = MAX_SIZE;
+                }
+            } else {
+                if (height > MAX_SIZE) {
+                    width *= MAX_SIZE / height;
+                    height = MAX_SIZE;
+                }
+            }
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(img, 0, 0, width, height);
+            return tempCanvas.toDataURL('image/jpeg', 0.8);
+        }
+
+        async function analyzeFoodImage(base64Data, mimeType) {
+            const menuText = menuInput.value.trim();
+            const menuContext = menuText ? `\n사용자가 입력한 실제 식단 메뉴: [${menuText}]\n이 메뉴를 반드시 최우선적으로 참고하여 사진 속 음식과 하나씩 매칭해줘.` : '';
+
+            // 프롬프트를 수정하여 설명 길이를 줄이고, 음식의 실제 위치 좌표(x, y)를 요구합니다.
+            const prompt = `
+            사용자가 식판에 담긴 급식 사진을 업로드했습니다.${menuContext}
+            이 사진을 분석하여 식판에 담긴 각 음식의 이름, 1~2줄의 짧고 통통 튀는 설명, 그리고 사진 상에서 해당 음식이 있는 대략적인 중심점 위치(x, y 비율)를 알려주세요.
+            
+            [중요 규칙]
+            1. '사용자가 입력한 실제 식단 메뉴'가 있다면, 이름이 조금 생소하더라도(예: 방언, 급식 은어) 사진 속 음식의 생김새(색깔, 질감 등)를 유추하여 반드시 제시된 메뉴 이름으로 매칭해주세요. 임의로 이름을 바꾸지 마세요.
+            2. 설명은 너무 길지 않게 핵심만 작성하고, 줄바꿈이 필요한 곳에는 반드시 '\\n'을 넣어주세요. (예: "얼큰한 국물에\\n고기가 듬뿍!")
+            3. 위치(x, y)는 이미지의 좌측 상단을 (0.0, 0.0), 우측 하단을 (1.0, 1.0)으로 했을 때의 상대적인 비율 값입니다. (예: 식판 한가운데면 x: 0.5, y: 0.5)
+            
+            응답은 반드시 아래 형식의 JSON 배열로만 해주세요. 다른 텍스트는 포함하지 마세요. (최대 6개 메뉴)
+            [
+              {
+                "name": "음식 이름 (예: 쇠고기국밥)",
+                "description": "짧은 설명 (줄바꿈 \\n 포함)",
+                "position": { "x": 0.8, "y": 0.7 }
+              }
+            ]
+            `;
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType || "image/jpeg",
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            const apiUrl = '/.netlify/functions/gemini';
+            
+            try {
+                // Implement basic retry logic
+                let response;
+                let retries = 3;
+                let delay = 1000;
+                
+                for (let i = 0; i < retries; i++) {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (response.ok) break;
+                    
+                    if (response.status === 429) {
+                        await new Promise(r => setTimeout(r, delay));
+                        delay *= 2;
+                    } else {
+                         throw new Error(`API error: ${response.status}`);
+                    }
+                }
+
+                if (!response.ok) {
+                    throw new Error("Failed to get response from Gemini API after retries.");
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    
+                    const jsonString = result.candidates[0].content.parts[0].text;
+                    try {
+                        return JSON.parse(jsonString);
+                    } catch (e) {
+                         console.error("Failed to parse JSON:", jsonString);
+                         throw new Error("API returned invalid JSON format.");
+                    }
+                } else {
+                    throw new Error("Unexpected API response structure.");
+                }
+
+            } catch (error) {
+                console.error("Gemini API call failed:", error);
+                throw error;
+            }
+        }
+
+        async function drawFinalImage(userImage, foodData) {
+            // Clear previous click detection boxes
+            drawnBoxes = [];
+
+            // 1. Draw Programmatic Background (replacing basic clearRect/fill)
+            drawProgrammaticBackground();
+
+            // 2. Draw Title
+            ctx.fillStyle = '#ff7b93'; 
+            ctx.font = '80px "Nanum Pen Script"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 8;
+            ctx.strokeText("오늘의 급식 이야기", CANVAS_WIDTH / 2, 20);
+            ctx.fillText("오늘의 급식 이야기", CANVAS_WIDTH / 2, 20);
+
+            // 3. Draw the User Image (Tray)
+            const maxImageWidth = CANVAS_WIDTH * 0.45; 
+            const maxImageHeight = CANVAS_HEIGHT * 0.65; 
+            
+            let drawWidth = userImage.width;
+            let drawHeight = userImage.height;
+
+            // Scale down if necessary while maintaining aspect ratio
+            const scale = Math.min(maxImageWidth / drawWidth, maxImageHeight / drawHeight);
+            drawWidth *= scale;
+            drawHeight *= scale;
+
+            const startX = (CANVAS_WIDTH - drawWidth) / 2;
+            const startY = 150; // 제목과의 공간을 110에서 150으로 넓힘
+
+            // Draw shadow for the tray
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 5;
+            ctx.shadowOffsetY = 5;
+            
+            // Draw rounded rectangle clip path for the user image
+            ctx.save();
+            roundRect(ctx, startX, startY, drawWidth, drawHeight, 20);
+            ctx.clip();
+            
+            // Image Enhancement (사진 고해상도 보정 및 식감 향상 필터 적용)
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            // 대비, 채도, 밝기를 약간씩 올려 음식을 더 먹음직스럽고 선명하게 보정
+            ctx.filter = 'contrast(1.15) saturate(1.3) brightness(1.05) drop-shadow(0px 0px 0px rgba(0,0,0,0))';
+            
+            ctx.drawImage(userImage, startX, startY, drawWidth, drawHeight);
+            ctx.restore();
+            
+            // 필터 및 그림자 리셋
+            ctx.shadowColor = 'transparent';
+            ctx.filter = 'none';
+
+            // 4. Draw Food Annotations
+            drawAnnotations(foodData, startX, startY, drawWidth, drawHeight);
+            
+            // 5. Draw Footer Message
+            ctx.fillStyle = '#fff0f5'; 
+            roundRect(ctx, CANVAS_WIDTH/2 - 250, CANVAS_HEIGHT - 85, 500, 50, 25);
+            ctx.fill();
+            
+            ctx.fillStyle = '#666';
+            ctx.font = '36px "Nanum Pen Script"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText("맛있는 급식 먹고 건강하게! 😋", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60);
+
+            // Update item chips UI
+            renderItemChips();
+        }
+
+        function renderItemChips() {
+            if (!itemChipsContainer) return;
+            itemChipsContainer.innerHTML = '';
+            itemCountText.textContent = globalFoodData.length;
+
+            globalFoodData.forEach((food, index) => {
+                const chip = document.createElement('div');
+                chip.className = 'flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg text-lg shadow-sm';
+                chip.innerHTML = `
+                    <span class="font-bold">${food.name || '식단 ' + (index + 1)}</span>
+                    <button class="delete-chip-btn text-red-400 hover:text-red-600 font-bold ml-1 hover:bg-red-100 rounded-full w-6 h-6 flex items-center justify-center text-sm transition-colors" data-index="${index}" title="이 식단 삭제">✕</button>
+                `;
+                itemChipsContainer.appendChild(chip);
+            });
+
+            // Attach event listeners to delete buttons
+            itemChipsContainer.querySelectorAll('.delete-chip-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.dataset.index, 10);
+                    deleteMenuItem(idx);
+                });
+            });
+        }
+
+        function addMenuItem() {
+            // Find unused menu items from menuInput text
+            const menuLines = menuInput.value.split('\n')
+                .map(l => l.replace(/^[-•*]\s*/, '').trim())
+                .filter(l => l.length > 0);
+
+            let nextName = `새 식단 ${globalFoodData.length + 1}`;
+            for (const line of menuLines) {
+                // If this line is not already in globalFoodData
+                if (!globalFoodData.some(f => f.name && f.name.includes(line))) {
+                    nextName = line;
+                    break;
+                }
+            }
+
+            // Alternate positioning between left and right side
+            const isLeft = globalFoodData.length % 2 === 0;
+            const newFood = {
+                name: nextName,
+                description: "맛있는 " + nextName + "!",
+                position: {
+                    x: isLeft ? 0.25 : 0.75,
+                    y: 0.3 + ((Math.floor(globalFoodData.length / 2) * 0.2) % 0.5)
+                }
+            };
+
+            globalFoodData.push(newFood);
+            if (currentSelectedImageObj) {
+                drawFinalImage(currentSelectedImageObj, globalFoodData);
+            }
+        }
+
+        function deleteMenuItem(index) {
+            if (index >= 0 && index < globalFoodData.length) {
+                globalFoodData.splice(index, 1);
+                if (currentSelectedImageObj) {
+                    drawFinalImage(currentSelectedImageObj, globalFoodData);
+                }
+            }
+        }
+
+        if (addMenuItemBtn) {
+            addMenuItemBtn.addEventListener('click', addMenuItem);
+        }
+
+        function drawProgrammaticBackground() {
+            // 따뜻하고 연한 파스텔 톤 (연두색/노란색 계열) 그라데이션 배경
+            const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+            gradient.addColorStop(0, '#e8f5e9'); // 연한 연두색 (위)
+            gradient.addColorStop(0.4, '#f1f8e9'); // 아주 연한 연두/노랑
+            gradient.addColorStop(0.8, '#f9fbe7'); // 연한 레몬/크림
+            gradient.addColorStop(1, '#f0f4c3'); // 하단은 약간 더 진한 연두/노랑
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 빛 번짐 (Bokeh) 효과 만들기
+            function drawBokeh(x, y, radius, opacity) {
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                ctx.fill();
+            }
+
+            // 여러 개의 크고 작은 빛 번짐 추가
+            drawBokeh(CANVAS_WIDTH * 0.1, CANVAS_HEIGHT * 0.2, 50, 0.4);
+            drawBokeh(CANVAS_WIDTH * 0.25, CANVAS_HEIGHT * 0.1, 80, 0.2);
+            drawBokeh(CANVAS_WIDTH * 0.8, CANVAS_HEIGHT * 0.3, 100, 0.15);
+            drawBokeh(CANVAS_WIDTH * 0.6, CANVAS_HEIGHT * 0.4, 40, 0.3);
+            drawBokeh(CANVAS_WIDTH * 0.9, CANVAS_HEIGHT * 0.1, 60, 0.5);
+            drawBokeh(CANVAS_WIDTH * 0.15, CANVAS_HEIGHT * 0.7, 90, 0.1);
+            drawBokeh(CANVAS_WIDTH * 0.85, CANVAS_HEIGHT * 0.8, 70, 0.2);
+            drawBokeh(CANVAS_WIDTH * 0.4, CANVAS_HEIGHT * 0.6, 120, 0.08);
+
+            // 부드러운 나뭇잎 실루엣/장식 (상단)
+            ctx.fillStyle = 'rgba(129, 199, 132, 0.15)'; // 부드러운 초록색 반투명
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(CANVAS_WIDTH * 0.2, CANVAS_HEIGHT * 0.15, CANVAS_WIDTH * 0.4, 0);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(CANVAS_WIDTH, 0);
+            ctx.quadraticCurveTo(CANVAS_WIDTH * 0.8, CANVAS_HEIGHT * 0.2, CANVAS_WIDTH * 0.5, 0);
+            ctx.fill();
+            
+            // 하단 잔디 느낌의 부드러운 곡선 장식
+            ctx.fillStyle = 'rgba(174, 213, 129, 0.2)'; 
+            ctx.beginPath();
+            ctx.moveTo(0, CANVAS_HEIGHT);
+            ctx.quadraticCurveTo(CANVAS_WIDTH * 0.3, CANVAS_HEIGHT * 0.85, CANVAS_WIDTH * 0.6, CANVAS_HEIGHT);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.quadraticCurveTo(CANVAS_WIDTH * 0.7, CANVAS_HEIGHT * 0.8, CANVAS_WIDTH * 0.4, CANVAS_HEIGHT);
+            ctx.fill();
+        }
+
+        function drawAnnotations(foodData, trayX, trayY, trayWidth, trayHeight) {
+            const leftItems = [];
+            const rightItems = [];
+            
+            // AI가 반환한 위치 데이터를 기반으로 실제 타겟 좌표 계산
+            foodData.forEach(food => {
+                const px = (food.position && food.position.x !== undefined) ? food.position.x : 0.5;
+                const py = (food.position && food.position.y !== undefined) ? food.position.y : 0.5;
+                
+                // 식판 이미지 상의 실제 픽셀 좌표
+                food.targetX = trayX + (px * trayWidth);
+                food.targetY = trayY + (py * trayHeight);
+            });
+
+            // 음식들을 타겟 좌표의 X값을 기준으로 오름차순(왼쪽에서 오른쪽)으로 정렬합니다.
+            const sortedByX = [...foodData].sort((a, b) => a.targetX - b.targetX);
+
+            // 전체 개수의 절반은 무조건 왼쪽, 나머지는 오른쪽에 강제 배분합니다.
+            const halfIndex = Math.ceil(sortedByX.length / 2);
+            for (let i = 0; i < sortedByX.length; i++) {
+                if (i < halfIndex) {
+                    leftItems.push(sortedByX[i]);
+                } else {
+                    rightItems.push(sortedByX[i]);
+                }
+            }
+
+            // 위에서 아래로 순서대로 선이 꼬이지 않도록 각 사이드 내에서 Y좌표 기준으로 다시 정렬
+            leftItems.sort((a, b) => a.targetY - b.targetY);
+            rightItems.sort((a, b) => a.targetY - b.targetY);
+
+            const drawSide = (items, isLeft) => {
+                const marginX = isLeft ? 220 : CANVAS_WIDTH - 220;
+                
+                items.forEach((food, index) => {
+                    // Find original index in globalFoodData for updating later
+                    const globalIndex = globalFoodData.findIndex(f => f === food);
+
+                    let boxY = trayY - 20 + index * ((trayHeight + 40) / Math.max(items.length - 1, 1));
+                    if (items.length === 1) boxY = trayY + trayHeight / 2;
+                    
+                    const colors = ['#f97316', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
+                    const colorIndex = isLeft ? index * 2 : index * 2 + 1;
+                    const bgColor = colors[colorIndex % colors.length];
+
+                    drawInfoBox(ctx, marginX, boxY, food.targetX, food.targetY, food.name, food.description, bgColor, isLeft, globalIndex);
+                });
+            };
+
+            drawSide(leftItems, true);
+            drawSide(rightItems, false);
+        }
+
+        function drawInfoBox(ctx, x, y, targetX, targetY, title, desc, bgColor, isLeft, globalIndex) {
+            ctx.save();
+            
+            // ... (Arrow drawing logic remains same)
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            
+            const startXArrow = x + (isLeft ? 80 : -80);
+            const startYArrow = y - 18; 
+            ctx.moveTo(startXArrow, startYArrow); 
+            
+            // 시작점과 목표지점을 부드럽게 잇는 곡선 제어점 계산
+            const cpX = startXArrow + (targetX - startXArrow) * 0.4;
+            // 타겟이 아래에 있으면 곡선이 살짝 위로 솟았다가 떨어지게, 위에 있으면 아래로 처졌다가 올라가게
+            const cpY = Math.min(startYArrow, targetY) - 40; 
+            
+            ctx.quadraticCurveTo(cpX, cpY, targetX, targetY);
+            
+            ctx.strokeStyle = '#4b5563';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.setLineDash([]); 
+            
+            // 화살표 머리
+            ctx.translate(targetX, targetY);
+            const angle = Math.atan2(targetY - cpY, targetX - cpX);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(-10, -6);
+            ctx.lineTo(0, 0);
+            ctx.lineTo(-10, 6);
+            ctx.strokeStyle = '#4b5563';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+            ctx.rotate(-angle);
+            ctx.translate(-targetX, -targetY);
+
+            // --- Draw Title Box ---
+            ctx.textAlign = 'center';
+            ctx.font = '40px "Nanum Pen Script"'; 
+            const titleWidth = ctx.measureText(title).width + 50;
+            const titleHeight = 50;
+            const titleBoxX = x - titleWidth/2;
+            const titleBoxY = y - 45;
+
+            // Store title box coordinates for click detection
+            drawnBoxes.push({
+                type: 'title',
+                index: globalIndex,
+                x: titleBoxX,
+                y: titleBoxY,
+                width: titleWidth,
+                height: titleHeight,
+                text: title
+            });
+            
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetX = 3;
+            ctx.shadowOffsetY = 5;
+            
+            ctx.fillStyle = bgColor;
+            roundRect(ctx, x - titleWidth/2, y - 45, titleWidth, 50, 25);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            
+            ctx.shadowColor = 'transparent';
+
+            // 타이틀 텍스트 
+            ctx.fillStyle = '#ffffff'; 
+            ctx.textBaseline = 'middle';
+            ctx.fillText(title, x, y - 20);
+
+            // --- Draw Description Text ---
+            ctx.font = '32px "Nanum Pen Script"';
+            ctx.textBaseline = 'top';
+            const maxWidth = 280; 
+
+            // Calculate bounding box for description block
+            let descStartY = y + 15;
+            let currentY = descStartY;
+            let linesCount = 0;
+            
+            // Fix: Use the passed 'desc' parameter and split it into raw lines based on \n
+            const rawLines = desc ? desc.split('\n') : [''];
+            
+            // 변경된 부분: 가독성을 위해 흰색 대신 짙은 회색(거의 검은색) 사용
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; // 배경과 분리되도록 흰색 외곽선을 얇게 추가
+            ctx.lineWidth = 4;
+            ctx.fillStyle = '#334155'; // Tailwind slate-700 (짙은 회색) - 연두색 배경에서 가독성이 좋음
+
+            rawLines.forEach(lineText => {
+                const words = lineText.split(' ');
+                let line = '';
+                for(let n = 0; n < words.length; n++) {
+                    let testLine = line + words[n] + ' ';
+                    let testWidth = ctx.measureText(testLine).width;
+                    if (testWidth > maxWidth && n > 0) {
+                        ctx.strokeText(line, x, currentY); // 흰색 외곽선 그리기
+                        ctx.fillText(line, x, currentY);   // 짙은 회색 텍스트 그리기
+                        line = words[n] + ' ';
+                        currentY += 36;
+                        linesCount++;
+                    } else {
+                        line = testLine;
+                    }
+                }
+                ctx.strokeText(line, x, currentY); // 흰색 외곽선 그리기
+                ctx.fillText(line, x, currentY);   // 짙은 회색 텍스트 그리기
+                currentY += 36;
+                linesCount++;
+            });
+
+            // Store description box coordinates for click detection
+            // Approximate bounding box width as maxWidth, height based on lines
+            const descHeight = Math.max(36, linesCount * 36);
+            drawnBoxes.push({
+                type: 'desc',
+                index: globalIndex,
+                x: x - maxWidth/2,
+                y: descStartY,
+                width: maxWidth,
+                height: descHeight,
+                text: desc // Fix: Use 'desc' instead of 'descText'
+            });
+
+            ctx.restore();
+        }
+
+        // --- Interactive Editing Logic ---
+        
+        // Update scale when window resizes to place inputs correctly
+        function updateCanvasScale() {
+            const rect = canvas.getBoundingClientRect();
+            currentScale = rect.width / CANVAS_WIDTH;
+        }
+        window.addEventListener('resize', () => {
+            updateCanvasScale();
+            removeEditingInput(); // Remove active input on resize to prevent misalignment
+        });
+
+        canvas.addEventListener('click', (e) => {
+            // Remove existing input if any
+            if (editingInput) {
+                commitEdit();
+                return; // Clicking elsewhere commits and closes
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            updateCanvasScale();
+            
+            // Calculate click coordinates relative to internal canvas resolution (1280x720)
+            const clickX = (e.clientX - rect.left) / currentScale;
+            const clickY = (e.clientY - rect.top) / currentScale;
+
+            // Check if click is inside any drawn box
+            for (const box of drawnBoxes) {
+                if (clickX >= box.x && clickX <= box.x + box.width &&
+                    clickY >= box.y && clickY <= box.y + box.height) {
+                    
+                    spawnInput(box, rect);
+                    break;
+                }
+            }
+        });
+
+        function spawnInput(box, canvasRect) {
+            removeEditingInput(); // Ensure clean state
+
+            let inputElem;
+            
+            if (box.type === 'title') {
+                inputElem = document.createElement('input');
+                inputElem.type = 'text';
+                inputElem.className = 'inline-edit-input inline-edit-title';
+            } else {
+                inputElem = document.createElement('textarea');
+                inputElem.className = 'inline-edit-input inline-edit-desc';
+                inputElem.rows = box.text.split('\\n').length || 2;
+                // Revert actual linebreaks to \n for editing
+                box.text = box.text.replace(/\n/g, '\\n');
+            }
+
+            inputElem.value = box.text.replace(/\\n/g, '\n'); // Show actual newlines in textarea
+            
+            // Calculate screen position based on canvas scale
+            const screenX = canvasRect.left + (box.x * currentScale) + window.scrollX;
+            const screenY = canvasRect.top + (box.y * currentScale) + window.scrollY;
+            const screenWidth = box.width * currentScale;
+            const screenHeight = box.height * currentScale;
+
+            inputElem.style.left = `${screenX - 10}px`; // slight padding offset
+            inputElem.style.top = `${screenY - 5}px`;
+            
+            // Size input slightly larger than bounding box for comfort
+            if(box.type === 'title'){
+                inputElem.style.width = `${Math.max(screenWidth + 40, 150)}px`;
+                inputElem.style.height = `${screenHeight + 10}px`;
+                // Scale font size based on canvas scaling, relative to base canvas font size
+                inputElem.style.fontSize = `${40 * currentScale}px`; 
+            } else {
+                inputElem.style.width = `${Math.max(screenWidth + 40, 200)}px`;
+                inputElem.style.minHeight = `${screenHeight + 20}px`;
+                inputElem.style.fontSize = `${32 * currentScale}px`;
+            }
+
+            // Store metadata on the element for committing
+            inputElem.dataset.boxType = box.type;
+            inputElem.dataset.dataIndex = box.index;
+
+            // Append to body so it overlays canvas
+            document.body.appendChild(inputElem);
+            
+            // Auto resize textarea height based on content
+            if (box.type === 'desc') {
+                 inputElem.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
+                // trigger once to set initial height correctly
+                inputElem.dispatchEvent(new Event('input'));
+            }
+
+            // Handle commit events (Enter key for title, blur for both)
+            inputElem.addEventListener('blur', commitEdit);
+            inputElem.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    if (box.type === 'title') {
+                        e.preventDefault(); // Stop newline in input
+                        commitEdit();
+                    }
+                    // For textarea, Enter adds a newline naturally, allow it.
+                }
+                if (e.key === 'Escape') {
+                    removeEditingInput(); // Cancel
+                }
+            });
+
+            // Focus and select text
+            inputElem.focus();
+            if(box.type === 'title') inputElem.select();
+            
+            editingInput = inputElem;
+        }
+
+        function commitEdit() {
+            if (!editingInput) return;
+
+            const newText = editingInput.value.trim();
+            const type = editingInput.dataset.boxType;
+            const index = parseInt(editingInput.dataset.dataIndex, 10);
+
+            if (newText) {
+                // Update underlying data
+                if (type === 'title') {
+                    globalFoodData[index].name = newText;
+                } else if (type === 'desc') {
+                    // Convert physical newlines back to literal "\n" string if needed, 
+                    // or just keep actual newlines since our drawing logic handles both
+                    globalFoodData[index].description = newText; 
+                }
+
+                // Redraw canvas with updated data
+                if (currentSelectedImageObj) {
+                    drawFinalImage(currentSelectedImageObj, globalFoodData);
+                }
+            }
+            
+            removeEditingInput();
+        }
+
+        function removeEditingInput() {
+            if (editingInput) {
+                editingInput.remove();
+                editingInput = null;
+            }
+        }
+
+        // Helper function to draw rounded rectangles
+        function roundRect(ctx, x, y, width, height, radius) {
+            if (typeof radius === 'undefined') {
+                radius = 5;
+            }
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+
+        function drawFallbackImage(userImage) {
+             ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+             drawProgrammaticBackground();
+             ctx.fillStyle = '#555';
+             ctx.font = '40px "Nanum Pen Script"';
+             ctx.textAlign = 'center';
+             ctx.fillText("API 통신 문제로 기본 이미지만 표시됩니다.", CANVAS_WIDTH / 2, 50);
+             
+             // 기본 이미지 표시할 때도 필터 적용
+             ctx.imageSmoothingEnabled = true;
+             ctx.imageSmoothingQuality = 'high';
+             ctx.filter = 'contrast(1.15) saturate(1.3) brightness(1.05)';
+             ctx.drawImage(userImage, 100, 100, CANVAS_WIDTH - 200, (CANVAS_WIDTH - 200) * (userImage.height / userImage.width));
+             ctx.filter = 'none';
+        }
+
+        function showLoading() {
+            loadingOverlay.style.display = 'flex';
+        }
+
+        function hideLoading() {
+            loadingOverlay.style.display = 'none';
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorMessage.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+
+        // Download functionality
+        downloadBtn.addEventListener('click', () => {
+            // Ensure any open edits are committed before downloading
+            if(editingInput) commitEdit();
+            
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = '오늘의_급식_이야기.png';
+            link.href = dataURL;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // Retry functionality
+        retryBtn.addEventListener('click', () => {
+            if (currentSelectedImageObj && currentSelectedFile) {
+                // 스크롤을 결과 캔버스가 잘 보이도록 이동
+                resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                processImage(currentSelectedImageObj, currentSelectedFile.type);
+            } else {
+                 showError("이미지 정보가 없습니다. 처음부터 다시 해주세요.");
+            }
+        });
+
+        // Reset functionality
+        resetBtn.addEventListener('click', () => {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            resultContainer.style.display = 'none';
+            actionButtons.classList.add('hidden');
+            if (itemManageBar) itemManageBar.classList.add('hidden');
+            uploadInput.value = ''; // Clear file input
+            hideError();
+            
+            // Reset state variables
+            currentSelectedFile = null;
+            currentSelectedImageObj = null;
+            globalFoodData = [];
+            imageStatus.classList.add('hidden');
+            imagePreview.src = '';
+            imagePreview.classList.add('hidden');
+        });
+
+    </script>
+</body>
+</html>
