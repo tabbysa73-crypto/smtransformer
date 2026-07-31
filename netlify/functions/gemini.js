@@ -1,13 +1,16 @@
 exports.handler = async function(event, context) {
     if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+        return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
         const body = JSON.parse(event.body);
         const { imageBase64, menuText } = body;
         
+        // 1. API 키와 모델 버전 환경 변수 불러오기
         const apiKey = process.env.GEMINI_API_KEY;
+        // 환경 변수에 GEMINI_MODEL이 없으면 'gemini-1.5-flash'를 기본값으로 사용합니다.
+        const modelVersion = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
         if (!apiKey) {
             return { statusCode: 500, body: JSON.stringify({ error: 'Netlify 환경 변수에 GEMINI_API_KEY가 없습니다.' }) };
@@ -40,35 +43,19 @@ exports.handler = async function(event, context) {
             }
         };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        // 2. fetch URL에 환경 변수(modelVersion) 적용하기
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelVersion}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        // ⭐ 핵심 수정 부분: 구글 API가 에러(503 과부하 등)를 뱉었을 때 꼼꼼하게 처리
         if (!response.ok) {
             const errorText = await response.text();
-            let errorMessage = `구글 API 서버 오류 (${response.status})`;
-            
-            try {
-                // 구글이 보낸 에러 메시지(JSON) 분석 시도
-                const errorJson = JSON.parse(errorText);
-                if (errorJson.error && errorJson.error.message) {
-                    errorMessage = errorJson.error.message;
-                }
-            } catch (e) {
-                // JSON 파싱 실패시 원본 텍스트 사용
-            }
-
-            // 503 에러 또는 High Demand 문구가 있으면 친절한 한국어 메시지로 변경
-            if (response.status === 503 || errorMessage.toLowerCase().includes('high demand')) {
-                errorMessage = '현재 구글 AI 서버에 전 세계 사용자가 몰려 처리가 지연되고 있습니다. 1~2분 뒤에 다시 시도해주세요. (서버 과부하)';
-            }
-
+            console.error("Gemini API 거절:", errorText);
             return {
-                statusCode: 200, // 프론트엔드로 안전하게 메시지를 전달하기 위해 200으로 보냄
-                body: JSON.stringify({ error: errorMessage })
+                statusCode: response.status,
+                body: JSON.stringify({ error: `구글 API 서버 응답 오류 (${response.status})` })
             };
         }
 
@@ -76,7 +63,7 @@ exports.handler = async function(event, context) {
         const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         
         if (!responseText) {
-             return { statusCode: 200, body: JSON.stringify({ error: 'AI 응답이 비어있습니다.' }) };
+             return { statusCode: 500, body: JSON.stringify({ error: 'AI 응답이 비어있습니다.' }) };
         }
 
         const parsedArray = JSON.parse(responseText);
@@ -90,7 +77,7 @@ exports.handler = async function(event, context) {
     } catch (error) {
         console.error("Netlify Function 내부 오류:", error);
         return {
-            statusCode: 200,
+            statusCode: 500,
             body: JSON.stringify({ error: "코드 파싱 오류: " + error.message })
         };
     }
