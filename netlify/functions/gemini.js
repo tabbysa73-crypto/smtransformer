@@ -9,8 +9,8 @@ exports.handler = async function(event, context) {
         
         // 1. API 키와 모델 버전 환경 변수 불러오기
         const apiKey = process.env.GEMINI_API_KEY;
-        // 환경 변수에 GEMINI_MODEL이 없으면 'gemini-1.5-flash'를 기본값으로 사용합니다.
-        const modelVersion = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+        // 환경 변수에 GEMINI_MODEL이 없으면 'gemini-3.6-flash'를 기본값으로 사용합니다.
+        const modelVersion = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
         if (!apiKey) {
             return { statusCode: 500, body: JSON.stringify({ error: 'Netlify 환경 변수에 GEMINI_API_KEY가 없습니다.' }) };
