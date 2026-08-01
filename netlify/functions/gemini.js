@@ -9,11 +9,16 @@ exports.handler = async function(event, context) {
         
         // 1. API 키와 모델 버전 환경 변수 불러오기
         const apiKey = process.env.GEMINI_API_KEY;
-        // 환경 변수에 GEMINI_MODEL이 없으면 'gemini-3.6-flash'를 기본값으로 사용합니다.
-        const modelVersion = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+        // 환경 변수에 GEMINI_MODEL이 없으면 'gemini-1.5-flash'를 기본값으로 사용합니다.
+        const modelVersion = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
         if (!apiKey) {
             return { statusCode: 500, body: JSON.stringify({ error: 'Netlify 환경 변수에 GEMINI_API_KEY가 없습니다.' }) };
+        }
+
+        // 이미지 데이터가 없거나 형식이 잘못된 경우 서버가 죽지 않고 에러 반환
+        if (!imageBase64 || typeof imageBase64 !== 'string' || !imageBase64.includes(',')) {
+             return { statusCode: 400, body: JSON.stringify({ error: '이미지 데이터가 잘못되었습니다. 사진을 다시 업로드해주세요.' }) };
         }
 
         const base64Data = imageBase64.split(',')[1];
