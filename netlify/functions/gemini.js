@@ -65,6 +65,7 @@ exports.handler = async function(event, context) {
         }
 
         const data = await response.json();
+        alert("서버에서 도착한 메뉴 개수: " + data.length + "개");
         const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         
         if (!responseText) {
