@@ -24,7 +24,7 @@ exports.handler = async function(event, context) {
         const base64Data = imageBase64.split(',')[1];
         const mimeType = imageBase64.split(';')[0].split(':')[1];
 
-        const prompt = "주어진 식판 사진을 분석하고, 사용자가 입력한 식단 목록(${menuText || '정보 없음'})을 참고하여 각 음식의 위치에 맞는 매력적인 설명을 작성해줘. 응답은 무조건 JSON 배열이어야 해.(중요: 입력된 텍스트 목록의 개수와 똑같은 개수로 무조건 맞춰서 반환해.)";
+        const prompt = `주어진 식판 사진을 분석하고, 사용자가 입력한 식단 목록(${menuText || '정보 없음'})을 참고하여 각 음식의 위치에 맞는 매력적인 설명을 작성해줘. 응답은 무조건 JSON 배열이어야 해.(중요:입력된 텍스트 목록의 개수와 똑같은 개수로 무조건 맞춰서 반환해.)`;
 
         const payload = {
             contents: [{
@@ -65,7 +65,6 @@ exports.handler = async function(event, context) {
         }
 
         const data = await response.json();
-        console.log("AI가 보낸 전체 데이터:", data);
         const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         
         if (!responseText) {
