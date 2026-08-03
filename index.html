@@ -95,7 +95,7 @@
             </div>
 
             <div class="flex gap-4 mt-6 w-full">
-                <button onclick="startTransformation()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">🔄 다시 분석하기</button>
+                <button onclick="startTransformation(true)" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">🔄 다시 분석하기</button>
                 <button onclick="downloadImage()" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg transition shadow-lg">💾 이미지 저장하기</button>
             </div>
         </div>
@@ -226,7 +226,7 @@
         // --- 4. Netlify Serverless API 연동 ---
         let currentAnnotations = [];
 
-        async function startTransformation() {
+        async function startTransformation(force = false) {
             if (!optimizedImageBase64) {
                 alert("사진을 업로드하거나 붙여넣어 주세요!");
                 return;
@@ -238,6 +238,18 @@
             document.getElementById('result-section').classList.add('hidden');
 
             try {
+                const dateKey = document.getElementById('date-picker').value || 'default';
+                const cacheKey = 'ai_result_' + dateKey;
+    
+        // 강제 분석(force)이 아니고, 저장된 임시 결과가 있다면?
+            if (!force && localStorage.getItem(cacheKey)) {
+               currentAnnotations = JSON.parse(localStorage.getItem(cacheKey));
+               document.getElementById('loading-msg').classList.add('hidden');
+               document.getElementById('result-section').classList.remove('hidden');
+              renderCanvas();
+              updateMenultemsList();
+              return; // 🛑 여기서 함수를 종료하여 아래의 API 통신을 아예 건너뜁니다!
+            }
                 // Netlify 통신 에러 방지를 위해 현재 주소를 기반으로 API URL 생성
                 const baseUrl = window.location.origin.includes('localhost') || window.location.origin.includes('file://') 
                     ? 'https://schoolmealtransformer.netlify.app' 
@@ -249,7 +261,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         imageBase64: optimizedImageBase64,
-                        menuText: document.getElementById('menu-text').value
+                        menuText: document.getElementById('menu-text').value + "\n(중요: 식단이 7~8개 이상일 수 있으니, 누락되는 반찬 없이 사진 속 모든 음식을 빠짐없이 모두 분석해서 결과에 포함해줘.)"
                     })
                 });
 
@@ -387,6 +399,9 @@
             ctx.font = 'bold 26px sans-serif';
             ctx.fillStyle = '#475569';
             ctx.fillText("맛있는 급식 먹고 건강하게! 😋", canvas.width / 2, footerY);
+            // 💾 화면이 갱신될 때마다 현재 식단 상태를 로컬 스토리지에 자동 저장
+            const dateKey = document.getElementById('date-picker').value || 'default';
+  localStorage.setItem('ai_result_' + dateKey, JSON.stringify(currentAnnotations));
         }
 
         function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
