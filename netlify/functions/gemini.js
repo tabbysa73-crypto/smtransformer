@@ -33,6 +33,11 @@ exports.handler = async function(event, context) {
                     { inlineData: { mimeType: mimeType, data: base64Data } }
                 ]
             }],
+            // 🔽 AI가 무조건 순수한 JSON 구조만 반환하도록 강제하는 설정 🔽
+            generationConfig: {
+                responseMimeType: "application/json"
+            }
+        };
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: {
