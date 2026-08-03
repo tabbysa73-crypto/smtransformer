@@ -33,11 +33,6 @@ exports.handler = async function(event, context) {
                     { inlineData: { mimeType: mimeType, data: base64Data } }
                 ]
             }],
-            // 🔽 AI가 무조건 순수한 JSON 구조만 반환하도록 강제하는 설정 🔽
-            generationConfig: {
-                responseMimeType: "application/json"
-            }
-        };
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -70,6 +65,7 @@ exports.handler = async function(event, context) {
         }
 
         const data = await response.json();
+        console.log("AI가 보낸 전체 데이터:", data);
         const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         
         if (!responseText) {
