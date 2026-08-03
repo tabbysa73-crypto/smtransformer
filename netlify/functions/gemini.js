@@ -24,7 +24,7 @@ exports.handler = async function(event, context) {
         const base64Data = imageBase64.split(',')[1];
         const mimeType = imageBase64.split(';')[0].split(':')[1];
 
-        const prompt = `주어진 식판 사진을 분석하고, 사용자가 입력한 식단 목록(${menuText || '정보 없음'})을 참고하여 각 음식의 위치에 맞는 매력적인 설명을 작성해줘. 응답은 무조건 JSON 배열이어야 해.`;
+        const prompt = `주어진 식판 사진을 분석하고, 사용자가 입력한 식단 목록(${menuText || '정보 없음'})을 참고하여 각 음식의 위치에 맞는 매력적인 설명을 작성해줘. 응답은 무조건 JSON 배열이어야 해.(중요: 식단이 8개 이상일 수 있으니, 개수 제한 없이 사진 속 모든 메뉴를 빠짐없이 분석해서 포함해.)`;
 
         const payload = {
             contents: [{
