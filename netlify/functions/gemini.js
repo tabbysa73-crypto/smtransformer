@@ -24,12 +24,7 @@ exports.handler = async function(event, context) {
         const base64Data = imageBase64.split(',')[1];
         const mimeType = imageBase64.split(';')[0].split(':')[1];
 
-        // 1. 먼저 엔터(\n)를 기준으로 메뉴를 쪼개고, 빈 줄을 제외하여 정확한 개수를 셉니다.
-        const menuArray = menuText ? menuText.split('\n').filter(item => item.trim() !== '') : [];
-        const menuCount = menuArray.length || 0;
-
-        // 2. 위에서 센 개수(menuCount)를 명령어에 직접 집어넣어 강제합니다.
-        const prompt = "오늘의 실제 급식 메뉴 목록입니다: [" + (menuText || '정보 없음') + "]\n\n위 목록에 적힌 메뉴들을 텍스트에서 하나씩 순서대로 읽고, 사진 속에서 해당 음식(빵, 디저트, 소스 포함)의 위치를 찾아 무조건 1:1로 매칭해 주세요.\n\n(매우 중요) 메뉴 목록에 정확히 " + menuCount + "개의 음식이 적혀 있으므로, 반드시 응답 JSON 배열 안에도 " + menuCount + "개의 항목이 정확히 들어있어야 합니다. 누락이나 병합은 절대 허용하지 않습니다.\n\n형식은 반드시 쌍따옴표를 사용한 JSON 배열이어야 합니다: [{\"name\": \"메뉴명\", \"description\": \"매력적인 설명\", \"position\": {\"x\": 0.5, \"y\": 0.5}}]";
+        const prompt = `주어진 식판 사진을 분석하고, 사용자가 입력한 식단 목록(${menuText || '정보 없음'})을 참고하여 각 음식의 위치에 맞는 매력적인 설명을 작성해줘. 응답은 무조건 JSON 배열이어야 해.(중요:입력된 텍스트 목록의 개수와 똑같은 개수로 무조건 맞춰서 반환해.)`;
         const payload = {
             contents: [{
                 parts: [
