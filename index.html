@@ -16,7 +16,8 @@
         .canvas-container {
             position: relative;
             width: 100%;
-            max-width: 800px; /* 16:9 비율에 맞춰 더 넓게 조정 */
+            max-width: 800px; /* 4:3 비율에 맞춰 조정 */
+            aspect-ratio: 4 / 3;
             margin: 0 auto;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             border-radius: 1rem;
@@ -334,9 +335,9 @@
 
         // We need an API key for Gemini. The system prompt says to leave it empty and Canvas will provide it.
         
-        // Canvas dimensions (16:9 비율로 변경)
-        const CANVAS_WIDTH = 1280;
-        const CANVAS_HEIGHT = 720; 
+        // Canvas dimensions (4:3 비율로 변경)
+        const CANVAS_WIDTH = 1024;
+        const CANVAS_HEIGHT = 768; 
 
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT; 
