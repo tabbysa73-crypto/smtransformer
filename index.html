@@ -122,7 +122,7 @@
 
     <header id="app-header" class="text-center mb-0 md:-mb-2 z-10" style="display: none;">
         <h1 class="text-4xl md:text-5xl font-bold text-emerald-700 drop-shadow-md">오늘의 급식 이야기</h1>
-        <p class="text-emerald-600 text-lg">급식 사진을 올리면 예쁘게 꾸며드려요!</p>
+        <p class="text-emerald-600 text-lg">식판에 생기를 넣어요!</p>
     </header>
 
     <main id="app-main" class="w-full max-w-2xl flex flex-col items-center gap-4 relative z-20" style="display: none;">
@@ -131,7 +131,7 @@
         <div class="w-full bg-white p-6 rounded-2xl shadow-sm text-center">
             
             <div class="bg-gray-50 p-4 rounded-xl mb-6 border border-gray-100">
-                <h3 class="text-emerald-600 font-bold mb-3 text-left px-2 text-xl">📅 월간 식단표(Excel)로 자동 입력하기</h3>
+                <h3 class="text-emerald-600 font-bold mb-3 text-left px-2 text-xl">📅 식단표(Excel) 업로</h3>
                 <div class="flex flex-col md:flex-row gap-3 items-center">
                     <label class="custom-file-upload w-full md:w-auto text-xl hover:bg-gray-100 !border-gray-300 !text-gray-600 flex-1">
                         <input type="file" id="excel-upload" accept=".xlsx, .xls">
@@ -152,7 +152,7 @@
 
             <div class="text-left mb-6 px-2">
                 <div class="flex justify-between items-center mb-2">
-                    <label for="menu-input" class="text-pink-400 font-bold text-2xl block">오늘의 식단 <span class="text-gray-400 text-lg font-normal">(선택사항)</span></label>
+                    <label for="menu-input" class="text-pink-400 font-bold text-2xl block">오늘의 식단 <span class="text-gray-400 text-lg font-normal">(수기입력가능)</span></label>
                     <button id="suggest-btn" class="text-emerald-500 text-sm hover:text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 transition-colors hidden">✨ 식단 설명 추천받기</button>
                 </div>
                 <textarea id="menu-input" rows="3" class="w-full p-4 border-2 border-pink-200 rounded-xl focus:outline-none focus:border-pink-400 text-2xl text-gray-700 placeholder-gray-300 transition-colors bg-pink-50/30 resize-none" placeholder="예: 기장밥&#13;&#10;쇠고기미역국&#13;&#10;배추김치..."></textarea>
@@ -182,7 +182,7 @@
             </div>
 
             <button id="transform-btn" class="w-full md:w-2/3 mx-auto bg-pink-400 hover:bg-pink-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition transform hover:scale-105 text-2xl block mb-6">
-                ✨ 예쁘게 꾸미기 시작! ✨
+                ✨ 식판에 생기를~ ✨
             </button>
 
             <div id="image-status" class="hidden mb-6">
