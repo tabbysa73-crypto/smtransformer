@@ -153,7 +153,6 @@
             <div class="text-left mb-6 px-2">
                 <div class="flex justify-between items-center mb-2">
                     <label for="menu-input" class="text-pink-400 font-bold text-2xl block">오늘의 식단 <span class="text-gray-400 text-lg font-normal">(수기입력가능)</span></label>
-                    <button id="suggest-btn" class="text-emerald-500 text-sm hover:text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 transition-colors hidden">✨ 식단 설명 추천받기</button>
                 </div>
                 <textarea id="menu-input" rows="3" class="w-full p-4 border-2 border-pink-200 rounded-xl focus:outline-none focus:border-pink-400 text-2xl text-gray-700 placeholder-gray-300 transition-colors bg-pink-50/30 resize-none" placeholder="예: 기장밥&#13;&#10;쇠고기미역국&#13;&#10;배추김치..."></textarea>
             </div>
@@ -217,10 +216,7 @@
                     🍽️ 등록된 식단 (<span id="item-count-text" class="text-emerald-600">0</span>개)
                     <span class="text-sm font-normal text-gray-500">(이미지의 글자를 직접 클릭해 수정하거나, 아래에서 추가/삭제하세요)</span>
                 </span>
-                <button id="add-menu-item-btn" class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-5 rounded-xl shadow transition transform hover:scale-105 text-lg flex items-center gap-2">
-                    ➕ 식단 항목 추가
-                </button>
-            </div>
+                </div>
             <div id="item-chips-container" class="flex flex-wrap gap-2 justify-center"></div>
         </div>
 
@@ -267,7 +263,6 @@
         
         const pasteArea = document.getElementById('paste-area'); 
         const menuInput = document.getElementById('menu-input');
-        const suggestBtn = document.getElementById('suggest-btn');
         const loadingOverlay = document.getElementById('loading-overlay');
         const actionButtons = document.getElementById('action-buttons');
         const downloadBtn = document.getElementById('download-btn');
@@ -287,8 +282,7 @@
         const itemManageBar = document.getElementById('item-manage-bar');
         const itemCountText = document.getElementById('item-count-text');
         const itemChipsContainer = document.getElementById('item-chips-container');
-        const addMenuItemBtn = document.getElementById('add-menu-item-btn');
-
+        
         // State variables
         let currentSelectedFile = null;
         let currentSelectedImageObj = null;
@@ -332,51 +326,6 @@
 
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT; 
-
-        // Show suggest button when there's text
-        menuInput.addEventListener('input', () => {
-            if(menuInput.value.trim().length > 0) {
-                suggestBtn.classList.remove('hidden');
-            } else {
-                suggestBtn.classList.add('hidden');
-            }
-        });
-
-        // Event listener for suggestion button
-        suggestBtn.addEventListener('click', async () => {
-            const currentMenu = menuInput.value.trim();
-            if (!currentMenu) return;
-
-            suggestBtn.disabled = true;
-            const originalText = suggestBtn.textContent;
-            suggestBtn.textContent = '추천 받는 중...';
-            
-            try {
-                const prompt = `다음은 오늘 학교 급식 메뉴입니다:\n[${currentMenu}]\n\n각 메뉴에 대해 1~2줄의 짧은(건강면 등) 설명을 달아주세요.  출력 형식은 메뉴 이름 뒤에 하이픈(-)을 붙이고 설명을 적는 식입니다. (예: 기장밥 - 고슬고슬 맛있는 기장밥! 🍚)\n\n다른 텍스트 없이 메뉴 설명만 반환해주세요.`;
-                
-                const payload = {
-                    contents: [{ parts: [{ text: prompt }] }]
-                };
-
-                const response = await fetch('/.netlify/functions/gemini', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    if (result.candidates && result.candidates[0].content) {
-                        menuInput.value = result.candidates[0].content.parts[0].text;
-                    }
-                }
-            } catch (error) {
-                console.error("Suggestion error:", error);
-            } finally {
-                suggestBtn.disabled = false;
-                suggestBtn.textContent = originalText;
-            }
-        });
 
         uploadInput.addEventListener('change', (e) => {
             if (e.target.files[0]) handleFile(e.target.files[0]);
@@ -859,51 +808,6 @@
             });
         }
 
-        function addMenuItem() {
-            // Find unused menu items from menuInput text
-            const menuLines = menuInput.value.split('\n')
-                .map(l => l.replace(/^[-•*]\s*/, '').trim())
-                .filter(l => l.length > 0);
-
-            let nextName = `새 식단 ${globalFoodData.length + 1}`;
-            for (const line of menuLines) {
-                // If this line is not already in globalFoodData
-                if (!globalFoodData.some(f => f.name && f.name.includes(line))) {
-                    nextName = line;
-                    break;
-                }
-            }
-
-            // Alternate positioning between left and right side
-            const isLeft = globalFoodData.length % 2 === 0;
-            const newFood = {
-                name: nextName,
-                description: "맛있는 " + nextName + "!",
-                position: {
-                    x: isLeft ? 0.25 : 0.75,
-                    y: 0.3 + ((Math.floor(globalFoodData.length / 2) * 0.2) % 0.5)
-                }
-            };
-
-            globalFoodData.push(newFood);
-            if (currentSelectedImageObj) {
-                drawFinalImage(currentSelectedImageObj, globalFoodData);
-            }
-        }
-
-        function deleteMenuItem(index) {
-            if (index >= 0 && index < globalFoodData.length) {
-                globalFoodData.splice(index, 1);
-                if (currentSelectedImageObj) {
-                    drawFinalImage(currentSelectedImageObj, globalFoodData);
-                }
-            }
-        }
-
-        if (addMenuItemBtn) {
-            addMenuItemBtn.addEventListener('click', addMenuItem);
-        }
-
         function drawProgrammaticBackground() {
             // 따뜻하고 연한 파스텔 톤 (연두색/노란색 계열) 그라데이션 배경
             const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
@@ -957,20 +861,23 @@
             ctx.quadraticCurveTo(CANVAS_WIDTH * 0.7, CANVAS_HEIGHT * 0.8, CANVAS_WIDTH * 0.4, CANVAS_HEIGHT);
             ctx.fill();
         }
-
         function drawAnnotations(foodData, trayX, trayY, trayWidth, trayHeight) {
             const leftItems = [];
             const rightItems = [];
             
             // AI가 반환한 위치 데이터를 기반으로 실제 타겟 좌표 계산
-            foodData.forEach(food => {
-                const px = (food.position && food.position.x !== undefined) ? food.position.x : 0.5;
-                const py = (food.position && food.position.y !== undefined) ? food.position.y : 0.5;
+        foodData.forEach(food => {
+                const rawX = (food.position && food.position.x !== undefined) ? food.position.x : 0.5;
+                const rawY = (food.position && food.position.y !== undefined) ? food.position.y : 0.5;
+                
+                // 💡 핵심 검증 로직: AI가 0이나 1을 벗어난 값을 주더라도, 무조건 0.05 ~ 0.95 사이(식판 안쪽)로 강제 고정!
+                const px = Math.max(0.05, Math.min(0.95, rawX));
+                const py = Math.max(0.05, Math.min(0.95, rawY));
                 
                 // 식판 이미지 상의 실제 픽셀 좌표
                 food.targetX = trayX + (px * trayWidth);
                 food.targetY = trayY + (py * trayHeight);
-            });
+        });
 
             // 음식들을 타겟 좌표의 X값을 기준으로 오름차순(왼쪽에서 오른쪽)으로 정렬합니다.
             const sortedByX = [...foodData].sort((a, b) => a.targetX - b.targetX);
