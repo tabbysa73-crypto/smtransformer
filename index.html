@@ -229,10 +229,7 @@
              <button id="download-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 text-xl">
                 이미지 저장하기
             </button>
-            <button id="retry-btn" class="bg-amber-400 hover:bg-amber-500 text-white font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 text-xl">
-                🔄 다시 분석하기
-            </button>
-        </div>
+            </div>
         
         <div id="error-message" class="text-red-500 font-bold hidden text-center mt-4 bg-red-100 p-4 rounded-lg w-full"></div>
 
@@ -274,7 +271,6 @@
         const loadingOverlay = document.getElementById('loading-overlay');
         const actionButtons = document.getElementById('action-buttons');
         const downloadBtn = document.getElementById('download-btn');
-        const retryBtn = document.getElementById('retry-btn');
         const resetBtn = document.getElementById('reset-btn');
         const errorMessage = document.getElementById('error-message');
         
@@ -333,7 +329,7 @@
         
         // Canvas dimensions (16:9 비율로 변경)
         const CANVAS_WIDTH = 1280;
-        const CANVAS_HEIGHT = 720; 
+        const CANVAS_HEIGHT = 800; 
 
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT; 
@@ -357,7 +353,7 @@
             suggestBtn.textContent = '추천 받는 중...';
             
             try {
-                const prompt = `다음은 오늘 학교 급식 메뉴입니다:\n[${currentMenu}]\n\n각 메뉴에 대해 1~2줄의 짧고 귀여운 설명을 달아주세요. 이모지도 사용해주세요. 출력 형식은 메뉴 이름 뒤에 하이픈(-)을 붙이고 설명을 적는 식입니다. (예: 기장밥 - 고슬고슬 맛있는 기장밥! 🍚)\n\n다른 텍스트 없이 메뉴 설명만 반환해주세요.`;
+                const prompt = `다음은 오늘 학교 급식 메뉴입니다:\n[${currentMenu}]\n\n각 메뉴에 대해 1~2줄의 짧은(건강면 등) 설명을 달아주세요.  출력 형식은 메뉴 이름 뒤에 하이픈(-)을 붙이고 설명을 적는 식입니다. (예: 기장밥 - 고슬고슬 맛있는 기장밥! 🍚)\n\n다른 텍스트 없이 메뉴 설명만 반환해주세요.`;
                 
                 const payload = {
                     contents: [{ parts: [{ text: prompt }] }]
@@ -661,29 +657,39 @@
 
         async function analyzeFoodImage(base64Data, mimeType) {
             const menuText = menuInput.value.trim();
-            const menuContext = menuText ? `\n사용자가 입력한 실제 식단 메뉴: [${menuText}]\n이 메뉴를 반드시 최우선적으로 참고하여 사진 속 음식과 하나씩 매칭해줘.` : '';
 
-            // 프롬프트를 수정하여 설명 길이를 줄이고, 음식의 실제 위치 좌표(x, y)를 요구합니다.
+            // 1. 💡 사용자가 입력한 메뉴의 정확한 개수 파악
+            const menuLines = menuText ? menuText.split('\n').map(l => l.trim()).filter(l => l.length > 0) : [];
+            const menuCount = menuLines.length;
+
+            // 2. 💡 가장 강력한 통제 문구 (개수 일치 강제)
+            const countInstruction = menuCount > 0 
+                ? `\n[가장 중요한 규칙: 반드시 ${menuCount}개의 결과를 생성할 것!] 사용자가 입력한 식단은 총 ${menuCount}개입니다. 눈에 안 보이거나 칸을 벗어난 음식(난, 소스, 음료 등)이라도 절대 누락하지 말고, 반드시 입력된 ${menuCount}개와 정확히 1:1로 매칭하여 ${menuCount}개의 JSON 객체를 반환하세요.` 
+                : '';
+
+            const menuContext = menuText ? `\n사용자가 입력한 실제 식단 메뉴: [${menuText}]` : '';
+
+            // 3. 💡 프롬프트 수정 (기존 '최대 6개 메뉴' 문구 삭제)
             const prompt = `
-            사용자가 식판에 담긴 급식 사진을 업로드했습니다.${menuContext}
+            사용자가 식판에 담긴 급식 사진을 업로드했습니다.${menuContext}${countInstruction}
             이 사진을 분석하여 식판에 담긴 각 음식의 이름, 1~2줄의 짧고 통통 튀는 설명, 그리고 사진 상에서 해당 음식이 있는 대략적인 중심점 위치(x, y 비율)를 알려주세요.
-            
+    
             [중요 규칙]
-            1. '사용자가 입력한 실제 식단 메뉴'가 있다면, 이름이 조금 생소하더라도(예: 방언, 급식 은어) 사진 속 음식의 생김새(색깔, 질감 등)를 유추하여 반드시 제시된 메뉴 이름으로 매칭해주세요. 임의로 이름을 바꾸지 마세요.
-            2. 설명은 너무 길지 않게 핵심만 작성하고, 줄바꿈이 필요한 곳에는 반드시 '\\n'을 넣어주세요. (예: "얼큰한 국물에\\n고기가 듬뿍!")
-            3. 위치(x, y)는 이미지의 좌측 상단을 (0.0, 0.0), 우측 하단을 (1.0, 1.0)으로 했을 때의 상대적인 비율 값입니다. (예: 식판 한가운데면 x: 0.5, y: 0.5)
-            
-            응답은 반드시 아래 형식의 JSON 배열로만 해주세요. 다른 텍스트는 포함하지 마세요. (최대 6개 메뉴)
+            1. '사용자가 입력한 실제 식단 메뉴'가 있다면, 임의로 이름을 바꾸지 말고 제시된 메뉴 이름을 그대로 사용하세요.
+            2. 설명은 너무 길지 않게 핵심만 작성하고, 줄바꿈이 필요한 곳에는 반드시 '\\n'을 넣어주세요.
+            3. 위치(x, y)는 이미지의 좌측 상단을 (0.0, 0.0), 우측 하단을 (1.0, 1.0)으로 했을 때의 상대적인 비율 값입니다. 사진에서 형태를 찾기 힘들면 대략적인 빈 공간(예: 0.1, 0.1)으로라도 좌표를 찍어서 무조건 포함해야 합니다.
+    
+            응답은 반드시 아래 형식의 JSON 배열로만 해주세요. 다른 텍스트는 포함하지 마세요.
             [
               {
-                "name": "음식 이름 (예: 쇠고기국밥)",
+                "name": "음식 이름",
                 "description": "짧은 설명 (줄바꿈 \\n 포함)",
                 "position": { "x": 0.8, "y": 0.7 }
               }
             ]
             `;
 
-            const payload = {
+        const payload = {
                 contents: [
                     {
                         role: "user",
@@ -1008,28 +1014,34 @@
 
         function drawInfoBox(ctx, x, y, targetX, targetY, title, desc, bgColor, isLeft, globalIndex) {
             ctx.save();
-            
-            // ... (Arrow drawing logic remains same)
+    
+            // 💡 1. 타이틀 글자의 너비를 화살표를 그리기 '전'에 미리 계산합니다!
+            ctx.textAlign = 'center';
+            ctx.font = '40px "Nanum Pen Script"'; 
+            const titleWidth = ctx.measureText(title).width + 50;
+
+            // 💡 2. 화살표 그리기 로직 (위치 동적 보정)
             ctx.beginPath();
             ctx.setLineDash([5, 5]);
-            
-            const startXArrow = x + (isLeft ? 80 : -80);
-            const startYArrow = y - 18; 
+    
+            // 화살표 시작점을 80으로 고정하지 않고, 계산된 이름표 박스 끝자락에 정확히 맞춥니다.
+            const startXArrow = isLeft ? (x + titleWidth / 2) : (x - titleWidth / 2);
+            const startYArrow = y - 20; // 타이틀 텍스트의 수직 중앙 (가장 자연스러운 위치)
+    
             ctx.moveTo(startXArrow, startYArrow); 
-            
-            // 시작점과 목표지점을 부드럽게 잇는 곡선 제어점 계산
-            const cpX = startXArrow + (targetX - startXArrow) * 0.4;
-            // 타겟이 아래에 있으면 곡선이 살짝 위로 솟았다가 떨어지게, 위에 있으면 아래로 처졌다가 올라가게
-            const cpY = Math.min(startYArrow, targetY) - 40; 
-            
+    
+            // 시작점과 목표지점을 부드럽게 잇는 곡선 제어점 (자연스럽게 활처럼 휘어지게)
+            const cpX = startXArrow + (targetX - startXArrow) * 0.5; // X축 정중앙
+            const cpY = Math.min(startYArrow, targetY) - 30; // 살짝 위로 둥글게 치솟았다 떨어짐
+    
             ctx.quadraticCurveTo(cpX, cpY, targetX, targetY);
-            
+    
             ctx.strokeStyle = '#4b5563';
             ctx.lineWidth = 2.5;
             ctx.stroke();
             ctx.setLineDash([]); 
-            
-            // 화살표 머리
+    
+            // 화살표 머리 그리기 (이후 부분은 기존 코드와 동일)
             ctx.translate(targetX, targetY);
             const angle = Math.atan2(targetY - cpY, targetX - cpX);
             ctx.rotate(angle);
@@ -1352,17 +1364,6 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-        });
-
-        // Retry functionality
-        retryBtn.addEventListener('click', () => {
-            if (currentSelectedImageObj && currentSelectedFile) {
-                // 스크롤을 결과 캔버스가 잘 보이도록 이동
-                resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                processImage(currentSelectedImageObj, currentSelectedFile.type);
-            } else {
-                 showError("이미지 정보가 없습니다. 처음부터 다시 해주세요.");
-            }
         });
 
         // Reset functionality
