@@ -209,17 +209,6 @@
             </div>
         </div>
 
-        <!-- Item Management Bar -->
-        <div id="item-manage-bar" class="w-full bg-white p-4 rounded-2xl shadow-sm text-center hidden">
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <span class="text-xl font-bold text-gray-700 flex items-center gap-2">
-                    🍽️ 등록된 식단 (<span id="item-count-text" class="text-emerald-600">0</span>개)
-                    <span class="text-sm font-normal text-gray-500">(이미지의 글자를 직접 클릭해 수정하거나, 아래에서 추가/삭제하세요)</span>
-                </span>
-                </div>
-            <div id="item-chips-container" class="flex flex-wrap gap-2 justify-center"></div>
-        </div>
-
         <!-- Action Buttons -->
         <div id="action-buttons" class="flex gap-4 hidden justify-center mt-6">
              <button id="download-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 text-xl">
@@ -278,11 +267,6 @@
         const imagePreview = document.getElementById('image-preview');
         const transformBtn = document.getElementById('transform-btn');
 
-        // Item management elements
-        const itemManageBar = document.getElementById('item-manage-bar');
-        const itemCountText = document.getElementById('item-count-text');
-        const itemChipsContainer = document.getElementById('item-chips-container');
-        
         // State variables
         let currentSelectedFile = null;
         let currentSelectedImageObj = null;
@@ -564,8 +548,7 @@
                 
                 hideLoading();
                 actionButtons.classList.remove('hidden');
-                if (itemManageBar) itemManageBar.classList.remove('hidden');
-
+                
                 // Scroll to see the result
                 resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
@@ -617,14 +600,14 @@
 
             const menuContext = menuText ? `\n사용자가 입력한 실제 식단 메뉴: [${menuText}]` : '';
 
-            // 3. 💡 프롬프트 수정 (기존 '최대 6개 메뉴' 문구 삭제)
+            // 3. 💡 프롬프트 수정
             const prompt = `
             사용자가 식판에 담긴 급식 사진을 업로드했습니다.${menuContext}${countInstruction}
-            이 사진을 분석하여 식판에 담긴 각 음식의 이름, 1~2줄의 짧고 통통 튀는 설명, 그리고 사진 상에서 해당 음식이 있는 대략적인 중심점 위치(x, y 비율)를 알려주세요.
+            이 사진을 분석하여 식판에 담긴 각 음식의 이름, 영양소나 건강에 좋은 점을 포함 1~2줄의 짧 설명, 그리고 사진 상에서 해당 음식이 있는 대략적인 중심점 위치(x, y 비율)를 알려주세요.
     
             [중요 규칙]
             1. '사용자가 입력한 실제 식단 메뉴'가 있다면, 임의로 이름을 바꾸지 말고 제시된 메뉴 이름을 그대로 사용하세요.
-            2. 설명은 너무 길지 않게 핵심만 작성하고, 줄바꿈이 필요한 곳에는 반드시 '\\n'을 넣어주세요.
+            2. 설명은 해당 음식의 건강/영양 정보를 자연스럽게 섞어서 너무 길지 않게 작성하고, 줄바꿈이 필요한 곳에는 반드시 '\\n'을 넣어주세요.
             3. 위치(x, y)는 이미지의 좌측 상단을 (0.0, 0.0), 우측 하단을 (1.0, 1.0)으로 했을 때의 상대적인 비율 값입니다. 사진에서 형태를 찾기 힘들면 대략적인 빈 공간(예: 0.1, 0.1)으로라도 좌표를 찍어서 무조건 포함해야 합니다.
     
             응답은 반드시 아래 형식의 JSON 배열로만 해주세요. 다른 텍스트는 포함하지 마세요.
@@ -780,34 +763,10 @@
             ctx.textBaseline = 'middle';
             ctx.fillText("맛있는 급식 먹고 건강하게! 😋", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60);
 
-            // Update item chips UI
-            renderItemChips();
+           
         }
 
-        function renderItemChips() {
-            if (!itemChipsContainer) return;
-            itemChipsContainer.innerHTML = '';
-            itemCountText.textContent = globalFoodData.length;
-
-            globalFoodData.forEach((food, index) => {
-                const chip = document.createElement('div');
-                chip.className = 'flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg text-lg shadow-sm';
-                chip.innerHTML = `
-                    <span class="font-bold">${food.name || '식단 ' + (index + 1)}</span>
-                    <button class="delete-chip-btn text-red-400 hover:text-red-600 font-bold ml-1 hover:bg-red-100 rounded-full w-6 h-6 flex items-center justify-center text-sm transition-colors" data-index="${index}" title="이 식단 삭제">✕</button>
-                `;
-                itemChipsContainer.appendChild(chip);
-            });
-
-            // Attach event listeners to delete buttons
-            itemChipsContainer.querySelectorAll('.delete-chip-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const idx = parseInt(e.currentTarget.dataset.index, 10);
-                    deleteMenuItem(idx);
-                });
-            });
-        }
-
+        
         function drawProgrammaticBackground() {
             // 따뜻하고 연한 파스텔 톤 (연두색/노란색 계열) 그라데이션 배경
             const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
